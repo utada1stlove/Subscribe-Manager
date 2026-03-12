@@ -4,15 +4,44 @@
 
 ## 环境要求
 
-- Python 3.10+（用到了 `float | None` 类型注解）
-- 无需安装第三方库，仅用标准库
+| 组件 | 版本要求 | 用途 |
+|------|----------|------|
+| Python | 3.10+ | 用到了 `float \| None` 类型注解 |
+| Flask | 任意新版 | Web UI 后端（CLI 不需要） |
+
+### Arch Linux 安装
+
+```bash
+# Python（通常已预装）
+sudo pacman -S python
+
+# 方案 A：用 pacman 安装 Flask（系统级，推荐）
+sudo pacman -S python-flask
+
+# 方案 B：用虚拟环境（不污染系统）
+python -m venv .venv
+source .venv/bin/activate   # bash/zsh
+# source .venv/bin/activate.fish   # fish
+pip install -r requirements.txt
+```
+
+### 其他发行版 / macOS
+
+```bash
+pip install -r requirements.txt
+```
 
 ## 文件结构
 
 ```
 .
-├── main.py     # 主程序（全部逻辑）
-├── data.json   # 订阅数据（自动创建/可预置）
+├── main.py          # CLI 主程序
+├── web.py           # Flask Web 后端
+├── templates/
+│   └── index.html   # 单页前端
+├── start.sh         # 一键启动 Web UI（自动创建 venv）
+├── requirements.txt # Python 依赖
+├── data.json        # 订阅数据（运行时自动创建，不纳入 git）
 └── README.md
 ```
 
@@ -67,8 +96,11 @@ python main.py summary -c CNY -p month --rate 7.25
 ## Web UI
 
 ```bash
-pip install flask
+# 安装依赖后启动（见上方「环境要求」）
 python web.py        # 默认 http://localhost:5000
+
+# 或用一键脚本（自动创建 venv，首次运行会安装依赖）
+./start.sh
 ```
 
 功能：
