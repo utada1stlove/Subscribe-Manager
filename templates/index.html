@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>订阅费用计算器</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --border: #e0e0e0;
+      --text: #1a1a2e;
+      --text-muted: #666;
+      --primary: #5c6bc0;
+      --primary-hover: #3f51b5;
+      --danger: #e53935;
+      --danger-hover: #c62828;
+      --success: #43a047;
+      --shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12131a;
+        --surface: #1e1f2b;
+        --border: #2e2f40;
+        --text: #e8e8f0;
+        --text-muted: #9a9ab0;
+        --primary: #7986cb;
+        --primary-hover: #9fa8da;
+        --danger: #ef5350;
+        --danger-hover: #ff6b6b;
+        --success: #66bb6a;
+        --shadow: 0 2px 8px rgba(0,0,0,.4);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: 24px; }
+    h2 { font-size: 1.1rem; margin-bottom: 16px; color: var(--text-muted); font-weight: 600; letter-spacing: .02em; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Forms */
+    .form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: .8rem; color: var(--text-muted); }
+    input, select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: .95rem;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus { border-color: var(--primary); }
+    input[type="number"] { width: 110px; }
+    input[data-field="name"] { width: 160px; }
+
+    /* Buttons */
+    button {
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: .85rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      transition: background .15s, color .15s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; font-size: .9rem; padding: 9px 20px; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-sm { padding: 4px 10px; font-size: .78rem; }
+    .btn-edit  { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+    .btn-edit:hover { background: var(--primary); color: #fff; }
+    .btn-save  { background: var(--success); color: #fff; }
+    .btn-save:hover { opacity: .85; }
+    .btn-cancel { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-cancel:hover { border-color: var(--text-muted); }
+    .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+
+    /* List table */
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th { text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(92,107,192,.05); }
+    .action-cell { display: flex; gap: 6px; }
+
+    /* Edit row inputs */
+    .edit-input { width: 100%; min-width: 80px; font-size: .85rem; padding: 5px 8px; }
+    .edit-input-name { min-width: 130px; }
+    .edit-select { font-size: .85rem; padding: 5px 8px; }
+
+    .tag {
+      display: inline-block; border-radius: 6px;
+      font-size: .75rem; font-weight: 700; padding: 2px 8px;
+    }
+    .tag-usd { background: #e8f5e9; color: #2e7d32; }
+    .tag-cny { background: #fff3e0; color: #e65100; }
+    @media (prefers-color-scheme: dark) {
+      .tag-usd { background: #1b3a1e; color: #81c784; }
+      .tag-cny { background: #3e2a00; color: #ffcc02; }
+    }
+
+    /* Summary controls */
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
+    .rate-badge { font-size: .8rem; color: var(--text-muted); align-self: center; margin-left: auto; }
+    .rate-badge strong { color: var(--primary); }
+
+    /* Summary layout */
+    .summary-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 680px) { .summary-layout { grid-template-columns: 1fr; } }
+    .chart-wrap { position: relative; max-width: 280px; }
+    .total-label { text-align: center; margin-top: 12px; font-size: 1.05rem; font-weight: 700; color: var(--primary); }
+
+    /* Detail table (what-if) */
+    .detail-table { width: 100%; font-size: .88rem; border-collapse: collapse; }
+    .detail-table th { padding: 6px 10px; text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); }
+    .detail-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    .detail-table tr:last-child td { border-bottom: none; }
+    .converted-val { font-weight: 600; color: var(--primary); }
+
+    /* What-if toggle */
+    .name-cell {
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .name-cell:hover { opacity: .75; }
+    .dot {
+      display: inline-block; width: 10px; height: 10px;
+      border-radius: 50%; flex-shrink: 0;
+    }
+    .detail-row.excluded .name-cell { opacity: .4; }
+    .detail-row.excluded .name-text { text-decoration: line-through; }
+    .detail-row.excluded .converted-val { opacity: .4; text-decoration: line-through; }
+    .detail-row.excluded .orig-val { opacity: .4; }
+    .whatif-hint { font-size: .75rem; color: var(--text-muted); margin-bottom: 10px; }
+
+    /* Empty / error */
+    .empty { color: var(--text-muted); font-size: .9rem; text-align: center; padding: 24px 0; }
+    .error-msg { color: var(--danger); font-size: .85rem; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>订阅费用计算器</h1>
+
+  <!-- Add form -->
+  <div class="card">
+    <h2>新增订阅</h2>
+    <form id="addForm" class="form-row">
+      <div class="form-group">
+        <label>名称</label>
+        <input name="name" type="text" placeholder="e.g. Netflix" required style="width:180px" />
+      </div>
+      <div class="form-group">
+        <label>金额</label>
+        <input name="amount" type="number" step="0.01" min="0.01" placeholder="15.99" required />
+      </div>
+      <div class="form-group">
+        <label>周期</label>
+        <select name="period">
+          <option value="month">月</option>
+          <option value="year">年</option>
+          <option value="quarter">季</option>
+          <option value="day">日</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>货币</label>
+        <select name="currency">
+          <option value="USD">USD</option>
+          <option value="CNY">CNY</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary">+ 添加</button>
+    </form>
+    <div id="addError" class="error-msg"></div>
+  </div>
+
+  <!-- Subscription list -->
+  <div class="card">
+    <h2>订阅列表</h2>
+    <div id="listWrap"><div class="empty">加载中…</div></div>
+  </div>
+
+  <!-- Summary -->
+  <div class="card">
+    <h2>费用汇总</h2>
+    <div class="controls">
+      <div class="form-group">
+        <label>目标货币</label>
+        <select id="sumCurrency">
+          <option value="CNY">CNY</option>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>目标周期</label>
+        <select id="sumPeriod">
+          <option value="month">月</option>
+          <option value="year">年</option>
+          <option value="quarter">季</option>
+          <option value="day">日</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>手动汇率（留空=实时）</label>
+        <input id="manualRate" type="number" step="0.0001" min="0.0001" placeholder="e.g. 7.25" style="width:140px" />
+      </div>
+      <div class="rate-badge" id="rateBadge">汇率：获取中…</div>
+    </div>
+    <div id="summaryWrap"><div class="empty">加载中…</div></div>
+  </div>
+
+  <script>
+  const PALETTE = [
+    '#5c6bc0','#26a69a','#ef5350','#ffa726','#ab47bc',
+    '#42a5f5','#66bb6a','#ff7043','#8d6e63','#26c6da',
+    '#ec407a','#d4e157',
+  ];
+  const PERIOD_LABEL = { day:'天', month:'月', quarter:'季', year:'年' };
+  const CUR_SYM = { CNY:'¥', USD:'$' };
+
+  let chart = null;
+  let subs = [];
+  let editingIdx = null;       // which list row is in edit mode
+  let excludedSet = new Set(); // what-if: indices excluded from chart
+  let lastSummaryData = null;  // cache for re-rendering chart without re-fetching
+
+  // ------------------------------------------------------------------ API ---
+  async function apiFetch(url, opts = {}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || `HTTP ${r.status}`);
+    }
+    return r.json();
+  }
+
+  // --------------------------------------------------------- Subscriptions --
+  async function loadSubs() {
+    subs = await apiFetch('/api/subscriptions');
+    editingIdx = null;
+    excludedSet = new Set(); // reset what-if when data changes
+    renderList();
+    loadSummary();
+  }
+
+  function renderList() {
+    const wrap = document.getElementById('listWrap');
+    if (!subs.length) {
+      wrap.innerHTML = '<div class="empty">暂无订阅，请先添加。</div>';
+      return;
+    }
+    const rows = subs.map((s, i) => {
+      if (i === editingIdx) return editRow(s, i);
+      return normalRow(s, i);
+    }).join('');
+    wrap.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>#</th><th>名称</th><th>金额</th><th>货币</th><th>周期</th><th>添加日期</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function normalRow(s, i) {
+    return `<tr id="row-${i}">
+      <td>${i + 1}</td>
+      <td>${esc(s.name)}</td>
+      <td>${s.amount.toFixed(2)}</td>
+      <td><span class="tag tag-${s.currency.toLowerCase()}">${s.currency}</span></td>
+      <td>${PERIOD_LABEL[s.period] || s.period}</td>
+      <td>${s.added || ''}</td>
+      <td><div class="action-cell">
+        <button class="btn-edit btn-sm" onclick="startEdit(${i})">编辑</button>
+        <button class="btn-danger btn-sm" onclick="deleteSub(${i})">删除</button>
+      </div></td>
+    </tr>`;
+  }
+
+  function editRow(s, i) {
+    const periodOpts = ['day','month','quarter','year'].map(p =>
+      `<option value="${p}" ${p === s.period ? 'selected' : ''}>${PERIOD_LABEL[p]}</option>`
+    ).join('');
+    const curOpts = ['USD','CNY'].map(c =>
+      `<option value="${c}" ${c === s.currency ? 'selected' : ''}>${c}</option>`
+    ).join('');
+    return `<tr id="row-${i}" style="background:rgba(92,107,192,.07)">
+      <td>${i + 1}</td>
+      <td><input class="edit-input edit-input-name" data-field="name" value="${esc(s.name)}" /></td>
+      <td><input class="edit-input" data-field="amount" type="number" step="0.01" min="0.01" value="${s.amount}" style="width:90px" /></td>
+      <td><select class="edit-select" data-field="currency">${curOpts}</select></td>
+      <td><select class="edit-select" data-field="period">${periodOpts}</select></td>
+      <td>${s.added || ''}</td>
+      <td><div class="action-cell">
+        <button class="btn-save btn-sm" onclick="saveEdit(${i})">保存</button>
+        <button class="btn-cancel btn-sm" onclick="cancelEdit()">取消</button>
+      </div></td>
+    </tr>`;
+  }
+
+  function startEdit(i) {
+    editingIdx = i;
+    renderList();
+    // focus name input
+    const inp = document.querySelector(`#row-${i} [data-field="name"]`);
+    if (inp) { inp.focus(); inp.select(); }
+  }
+
+  function cancelEdit() {
+    editingIdx = null;
+    renderList();
+  }
+
+  async function saveEdit(i) {
+    const row = document.getElementById(`row-${i}`);
+    const get = field => row.querySelector(`[data-field="${field}"]`).value;
+    const errEl = document.getElementById('addError'); // reuse error area
+    try {
+      await apiFetch(`/api/subscriptions/${i}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:     get('name'),
+          amount:   parseFloat(get('amount')),
+          period:   get('period'),
+          currency: get('currency'),
+        }),
+      });
+      await loadSubs();
+    } catch (err) {
+      errEl.textContent = err.message;
+    }
+  }
+
+  async function deleteSub(idx) {
+    await apiFetch(`/api/subscriptions/${idx}`, { method: 'DELETE' });
+    loadSubs();
+  }
+
+  // -------------------------------------------------------------- Add form --
+  document.getElementById('addForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const errEl = document.getElementById('addError');
+    errEl.textContent = '';
+    try {
+      await apiFetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:     fd.get('name'),
+          amount:   parseFloat(fd.get('amount')),
+          period:   fd.get('period'),
+          currency: fd.get('currency'),
+        }),
+      });
+      e.target.reset();
+      loadSubs();
+    } catch (err) {
+      errEl.textContent = err.message;
+    }
+  });
+
+  // --------------------------------------------------------------- Summary --
+  async function loadSummary() {
+    const currency = document.getElementById('sumCurrency').value;
+    const period   = document.getElementById('sumPeriod').value;
+    const manual   = document.getElementById('manualRate').value.trim();
+
+    let url = `/api/summary?currency=${currency}&period=${period}`;
+    if (manual) url += `&rate=${encodeURIComponent(manual)}`;
+
+    let data;
+    try {
+      data = await apiFetch(url);
+    } catch (err) {
+      document.getElementById('summaryWrap').innerHTML =
+        `<div class="empty error-msg">汇总失败：${err.message}</div>`;
+      return;
+    }
+
+    const badge = document.getElementById('rateBadge');
+    const src = data.rate_source === 'manual' ? '手动' : '实时';
+    badge.innerHTML = `汇率（${src}）：<strong>1 USD = ${data.usd_cny.toFixed(4)} CNY</strong>`;
+
+    if (!data.items.length) {
+      document.getElementById('summaryWrap').innerHTML = '<div class="empty">暂无订阅。</div>';
+      if (chart) { chart.destroy(); chart = null; }
+      lastSummaryData = null;
+      return;
+    }
+
+    lastSummaryData = data;
+    renderSummary(data);
+  }
+
+  function renderSummary(data) {
+    const currency = document.getElementById('sumCurrency').value;
+    const period   = document.getElementById('sumPeriod').value;
+    const sym    = CUR_SYM[currency] || '';
+    const pLabel = PERIOD_LABEL[period] || period;
+
+    // active items only (for total and chart)
+    const activeItems = data.items.filter((_, i) => !excludedSet.has(i));
+    const activeTotal = activeItems.reduce((s, it) => s + it.converted, 0);
+
+    const rows = data.items.map((item, i) => {
+      const excl = excludedSet.has(i);
+      const color = PALETTE[i % PALETTE.length];
+      return `<tr class="detail-row${excl ? ' excluded' : ''}" onclick="toggleExclude(${i})" style="cursor:pointer">
+        <td>
+          <span class="name-cell">
+            <span class="dot" style="background:${excl ? 'var(--border)' : color}"></span>
+            <span class="name-text">${esc(item.name)}</span>
+          </span>
+        </td>
+        <td class="orig-val">${item.amount.toFixed(2)} ${item.currency}/${PERIOD_LABEL[item.period] || item.period}</td>
+        <td class="converted-val">${sym}${item.converted.toFixed(2)}/${pLabel}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('summaryWrap').innerHTML = `
+      <p class="whatif-hint">💡 点击名称可临时划掉，观察去掉某项后的费用变化（不影响数据）</p>
+      <div class="summary-layout">
+        <div>
+          <div class="chart-wrap"><canvas id="myChart"></canvas></div>
+          <div class="total-label">合计 ${sym}${activeTotal.toFixed(2)}/${pLabel}</div>
+        </div>
+        <div>
+          <table class="detail-table">
+            <thead><tr><th>名称</th><th>原始金额</th><th>换算金额</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    drawChart(data, activeItems, sym, pLabel, activeTotal);
+  }
+
+  function drawChart(data, activeItems, sym, pLabel, activeTotal) {
+    if (chart) { chart.destroy(); chart = null; }
+    if (!activeItems.length) return;
+
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const ctx = document.getElementById('myChart').getContext('2d');
+
+    // map active items back to their original indices for colours
+    const indices = data.items
+      .map((_, i) => i)
+      .filter(i => !excludedSet.has(i));
+
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: indices.map(i => data.items[i].name),
+        datasets: [{
+          data:            indices.map(i => data.items[i].converted),
+          backgroundColor: indices.map(i => PALETTE[i % PALETTE.length]),
+          borderColor: isDark ? '#1e1f2b' : '#fff',
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const val = ctx.parsed;
+                const pct = activeTotal > 0 ? (val / activeTotal * 100).toFixed(1) : '0.0';
+                return ` ${sym}${val.toFixed(2)}/${pLabel}  (${pct}%)`;
+              },
+            },
+          },
+        },
+        cutout: '62%',
+        animation: { duration: 250 },
+      },
+    });
+  }
+
+  function toggleExclude(i) {
+    if (excludedSet.has(i)) excludedSet.delete(i);
+    else excludedSet.add(i);
+    if (lastSummaryData) renderSummary(lastSummaryData);
+  }
+
+  // ---------------------------------------------------------------- Utils --
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // --------------------------------------------------------- Event wiring --
+  ['sumCurrency','sumPeriod'].forEach(id =>
+    document.getElementById(id).addEventListener('change', loadSummary));
+  document.getElementById('manualRate').addEventListener('input', loadSummary);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (lastSummaryData) renderSummary(lastSummaryData);
+  });
+
+  loadSubs();
+  </script>
+</body>
+</html>
