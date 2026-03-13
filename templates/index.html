@@ -6,166 +6,206 @@
   <title>订阅费用计算器</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
+    /* ── Theme variables ──────────────────────────────────────── */
     :root {
-      --bg: #f5f6fa;
-      --surface: #ffffff;
-      --border: #e0e0e0;
-      --text: #1a1a2e;
-      --text-muted: #666;
-      --primary: #5c6bc0;
-      --primary-hover: #3f51b5;
-      --danger: #e53935;
-      --danger-hover: #c62828;
-      --success: #43a047;
+      --bg: #f5f6fa; --surface: #ffffff; --border: #e0e0e0;
+      --text: #1a1a2e; --text-muted: #666;
+      --primary: #5c6bc0; --primary-hover: #3f51b5;
+      --danger: #e53935; --success: #43a047; --warn: #f57c00;
       --shadow: 0 2px 8px rgba(0,0,0,.08);
     }
     @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #12131a;
-        --surface: #1e1f2b;
-        --border: #2e2f40;
-        --text: #e8e8f0;
-        --text-muted: #9a9ab0;
-        --primary: #7986cb;
-        --primary-hover: #9fa8da;
-        --danger: #ef5350;
-        --danger-hover: #ff6b6b;
-        --success: #66bb6a;
+      html:not([data-theme="light"]) {
+        --bg: #12131a; --surface: #1e1f2b; --border: #2e2f40;
+        --text: #e8e8f0; --text-muted: #9a9ab0;
+        --primary: #7986cb; --primary-hover: #9fa8da;
+        --danger: #ef5350; --success: #66bb6a; --warn: #ffa726;
         --shadow: 0 2px 8px rgba(0,0,0,.4);
       }
     }
+    html[data-theme="dark"] {
+      --bg: #12131a; --surface: #1e1f2b; --border: #2e2f40;
+      --text: #e8e8f0; --text-muted: #9a9ab0;
+      --primary: #7986cb; --primary-hover: #9fa8da;
+      --danger: #ef5350; --success: #66bb6a; --warn: #ffa726;
+      --shadow: 0 2px 8px rgba(0,0,0,.4);
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      padding: 24px 16px 48px;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; padding: 24px 16px 48px;
+      transition: background .2s, color .2s;
     }
-    h1 { font-size: 1.6rem; margin-bottom: 24px; }
-    h2 { font-size: 1.1rem; margin-bottom: 16px; color: var(--text-muted); font-weight: 600; letter-spacing: .02em; }
+
+    /* ── Header ──────────────────────────────────────────────── */
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.05rem; margin-bottom: 16px; color: var(--text-muted); font-weight: 600; letter-spacing: .02em; }
+    .theme-btn {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; color: var(--text-muted); cursor: pointer;
+      font-size: .8rem; padding: 5px 14px; transition: all .15s;
+    }
+    .theme-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Card ────────────────────────────────────────────────── */
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px 24px;
-      margin-bottom: 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
       box-shadow: var(--shadow);
     }
 
-    /* Forms */
+    /* ── Forms ───────────────────────────────────────────────── */
     .form-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
-    .form-group label { font-size: .8rem; color: var(--text-muted); }
-    input, select {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: .95rem;
-      padding: 8px 12px;
-      outline: none;
+    .form-group label { font-size: .78rem; color: var(--text-muted); }
+    input[type="text"], input[type="number"], input[type="date"], select {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-size: .9rem; padding: 7px 11px; outline: none;
       transition: border-color .15s;
     }
     input:focus, select:focus { border-color: var(--primary); }
-    input[type="number"] { width: 110px; }
-    input[data-field="name"] { width: 160px; }
-
-    /* Buttons */
-    button {
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: .85rem;
-      font-weight: 600;
-      padding: 6px 14px;
-      transition: background .15s, color .15s;
+    input[type="color"] {
+      width: 38px; height: 34px; padding: 2px;
+      border: 1px solid var(--border); border-radius: 8px;
+      cursor: pointer; background: var(--bg);
     }
-    .btn-primary { background: var(--primary); color: #fff; font-size: .9rem; padding: 9px 20px; }
+    .color-toggle-wrap { display: flex; gap: 8px; align-items: center; }
+    .color-toggle-wrap input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
+
+    /* ── Buttons ─────────────────────────────────────────────── */
+    button {
+      border: none; border-radius: 8px; cursor: pointer;
+      font-size: .85rem; font-weight: 600; padding: 6px 14px;
+      transition: background .15s, color .15s, opacity .15s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; font-size: .9rem; padding: 8px 18px; }
     .btn-primary:hover { background: var(--primary-hover); }
-    .btn-sm { padding: 4px 10px; font-size: .78rem; }
-    .btn-edit  { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+    .btn-sm { padding: 3px 9px; font-size: .76rem; }
+    .btn-edit   { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
     .btn-edit:hover { background: var(--primary); color: #fff; }
-    .btn-save  { background: var(--success); color: #fff; }
+    .btn-save   { background: var(--success); color: #fff; }
     .btn-save:hover { opacity: .85; }
     .btn-cancel { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
     .btn-cancel:hover { border-color: var(--text-muted); }
     .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
     .btn-danger:hover { background: var(--danger); color: #fff; }
 
-    /* List table */
-    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    th { text-align: left; padding: 8px 12px; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); }
-    td { padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    /* ── List table ──────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th {
+      text-align: left; padding: 7px 10px;
+      color: var(--text-muted); font-weight: 600;
+      border-bottom: 2px solid var(--border); font-size: .78rem; white-space: nowrap;
+    }
+    td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(92,107,192,.05); }
-    .action-cell { display: flex; gap: 6px; }
+    .action-cell { display: flex; gap: 5px; }
 
-    /* Edit row inputs */
-    .edit-input { width: 100%; min-width: 80px; font-size: .85rem; padding: 5px 8px; }
-    .edit-input-name { min-width: 130px; }
-    .edit-select { font-size: .85rem; padding: 5px 8px; }
-
-    .tag {
-      display: inline-block; border-radius: 6px;
-      font-size: .75rem; font-weight: 700; padding: 2px 8px;
+    /* Edit row */
+    .edit-row td { background: rgba(92,107,192,.07); }
+    .edit-input {
+      font-size: .84rem; padding: 4px 7px;
+      background: var(--surface); border: 1px solid var(--primary);
+      border-radius: 6px; color: var(--text);
     }
+    .edit-select {
+      font-size: .84rem; padding: 4px 7px;
+      background: var(--surface); border: 1px solid var(--primary);
+      border-radius: 6px; color: var(--text);
+    }
+    input[type="color"].edit-color { width: 30px; height: 28px; padding: 1px; border-radius: 5px; }
+
+    /* Tags */
+    .tag { display: inline-block; border-radius: 6px; font-size: .72rem; font-weight: 700; padding: 2px 7px; }
     .tag-usd { background: #e8f5e9; color: #2e7d32; }
     .tag-cny { background: #fff3e0; color: #e65100; }
+    .tag-eur { background: #e3f2fd; color: #1565c0; }
+    .tag-jpy { background: #fce4ec; color: #880e4f; }
+    .tag-gbp { background: #f3e5f5; color: #6a1b9a; }
+    .tag-hkd { background: #e0f2f1; color: #00695c; }
+    .tag-sgd { background: #e0f7fa; color: #006064; }
     @media (prefers-color-scheme: dark) {
-      .tag-usd { background: #1b3a1e; color: #81c784; }
-      .tag-cny { background: #3e2a00; color: #ffcc02; }
+      html:not([data-theme="light"]) .tag-usd { background: #1b3a1e; color: #81c784; }
+      html:not([data-theme="light"]) .tag-cny { background: #3e2a00; color: #ffcc02; }
+      html:not([data-theme="light"]) .tag-eur { background: #0d2640; color: #90caf9; }
+      html:not([data-theme="light"]) .tag-jpy { background: #3b0a1a; color: #f48fb1; }
+      html:not([data-theme="light"]) .tag-gbp { background: #2a0a3a; color: #ce93d8; }
+      html:not([data-theme="light"]) .tag-hkd { background: #002825; color: #80cbc4; }
+      html:not([data-theme="light"]) .tag-sgd { background: #002020; color: #80deea; }
     }
+    html[data-theme="dark"] .tag-usd { background: #1b3a1e; color: #81c784; }
+    html[data-theme="dark"] .tag-cny { background: #3e2a00; color: #ffcc02; }
+    html[data-theme="dark"] .tag-eur { background: #0d2640; color: #90caf9; }
+    html[data-theme="dark"] .tag-jpy { background: #3b0a1a; color: #f48fb1; }
+    html[data-theme="dark"] .tag-gbp { background: #2a0a3a; color: #ce93d8; }
+    html[data-theme="dark"] .tag-hkd { background: #002825; color: #80cbc4; }
+    html[data-theme="dark"] .tag-sgd { background: #002020; color: #80deea; }
 
-    /* Summary controls */
+    /* Renewal */
+    .renewal { font-size: .75rem; font-weight: 600; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+    .renewal-ok     { color: var(--success); }
+    .renewal-warn   { color: var(--warn); }
+    .renewal-urgent { color: var(--danger); font-weight: 700; }
+
+    /* Color dot in list */
+    .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 5px; flex-shrink: 0; }
+
+    /* ── Summary controls ────────────────────────────────────── */
     .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
     .rate-badge { font-size: .8rem; color: var(--text-muted); align-self: center; margin-left: auto; }
     .rate-badge strong { color: var(--primary); }
 
-    /* Summary layout */
-    .summary-layout {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 24px;
-      align-items: start;
+    /* Palette swatches */
+    .palette-swatches { display: flex; gap: 7px; align-items: center; margin-top: 2px; }
+    .palette-swatch {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2px solid transparent; cursor: pointer;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+      flex-shrink: 0;
     }
+    .palette-swatch:hover { transform: scale(1.15); }
+    .palette-swatch.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--primary);
+    }
+
+    /* ── Summary layout ──────────────────────────────────────── */
+    .summary-layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; }
     @media (max-width: 680px) { .summary-layout { grid-template-columns: 1fr; } }
-    .chart-wrap { position: relative; max-width: 280px; }
+    .chart-wrap { position: relative; max-width: 260px; }
     .total-label { text-align: center; margin-top: 12px; font-size: 1.05rem; font-weight: 700; color: var(--primary); }
 
-    /* Detail table (what-if) */
-    .detail-table { width: 100%; font-size: .88rem; border-collapse: collapse; }
-    .detail-table th { padding: 6px 10px; text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); }
-    .detail-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+    /* Detail table */
+    .detail-table { width: 100%; font-size: .86rem; border-collapse: collapse; }
+    .detail-table th { padding: 6px 10px; text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 2px solid var(--border); font-size: .78rem; }
+    .detail-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
     .detail-table tr:last-child td { border-bottom: none; }
     .converted-val { font-weight: 600; color: var(--primary); }
 
-    /* What-if toggle */
-    .name-cell {
-      cursor: pointer;
-      user-select: none;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .name-cell { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 7px; }
     .name-cell:hover { opacity: .75; }
-    .dot {
-      display: inline-block; width: 10px; height: 10px;
-      border-radius: 50%; flex-shrink: 0;
-    }
-    .detail-row.excluded .name-cell { opacity: .4; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .detail-row.excluded .name-cell { opacity: .35; }
     .detail-row.excluded .name-text { text-decoration: line-through; }
-    .detail-row.excluded .converted-val { opacity: .4; text-decoration: line-through; }
-    .detail-row.excluded .orig-val { opacity: .4; }
-    .whatif-hint { font-size: .75rem; color: var(--text-muted); margin-bottom: 10px; }
+    .detail-row.excluded .converted-val { opacity: .35; text-decoration: line-through; }
+    .detail-row.excluded .orig-val { opacity: .35; }
+    .whatif-hint { font-size: .75rem; color: var(--text-muted); margin-bottom: 12px; }
 
     /* Empty / error */
     .empty { color: var(--text-muted); font-size: .9rem; text-align: center; padding: 24px 0; }
-    .error-msg { color: var(--danger); font-size: .85rem; margin-top: 6px; }
+    .error-msg { color: var(--danger); font-size: .82rem; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <h1>订阅费用计算器</h1>
+  <div class="page-header">
+    <h1>订阅费用计算器</h1>
+    <button class="theme-btn" id="themeBtn" onclick="cycleTheme()">自动</button>
+  </div>
 
   <!-- Add form -->
   <div class="card">
@@ -173,11 +213,11 @@
     <form id="addForm" class="form-row">
       <div class="form-group">
         <label>名称</label>
-        <input name="name" type="text" placeholder="e.g. Netflix" required style="width:180px" />
+        <input name="name" type="text" placeholder="e.g. Netflix" required style="width:155px" />
       </div>
       <div class="form-group">
         <label>金额</label>
-        <input name="amount" type="number" step="0.01" min="0.01" placeholder="15.99" required />
+        <input name="amount" type="number" step="0.01" min="0.01" placeholder="15.99" required style="width:100px" />
       </div>
       <div class="form-group">
         <label>周期</label>
@@ -185,6 +225,7 @@
           <option value="month">月</option>
           <option value="year">年</option>
           <option value="quarter">季</option>
+          <option value="half_year">半年</option>
           <option value="day">日</option>
         </select>
       </div>
@@ -193,7 +234,23 @@
         <select name="currency">
           <option value="USD">USD</option>
           <option value="CNY">CNY</option>
+          <option value="EUR">EUR</option>
+          <option value="JPY">JPY</option>
+          <option value="GBP">GBP</option>
+          <option value="HKD">HKD</option>
+          <option value="SGD">SGD</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>开始日期</label>
+        <input name="added" type="date" id="addDateInput" style="width:135px" />
+      </div>
+      <div class="form-group">
+        <label>自定义颜色</label>
+        <div class="color-toggle-wrap">
+          <input type="checkbox" id="addUseColor" onchange="toggleAddColor()" />
+          <input type="color" id="addColorPicker" value="#5c6bc0" disabled style="opacity:.4" />
+        </div>
       </div>
       <button type="submit" class="btn-primary">+ 添加</button>
     </form>
@@ -215,6 +272,11 @@
         <select id="sumCurrency">
           <option value="CNY">CNY</option>
           <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+          <option value="JPY">JPY</option>
+          <option value="GBP">GBP</option>
+          <option value="HKD">HKD</option>
+          <option value="SGD">SGD</option>
         </select>
       </div>
       <div class="form-group">
@@ -223,12 +285,17 @@
           <option value="month">月</option>
           <option value="year">年</option>
           <option value="quarter">季</option>
+          <option value="half_year">半年</option>
           <option value="day">日</option>
         </select>
       </div>
       <div class="form-group">
-        <label>手动汇率（留空=实时）</label>
+        <label>手动汇率 USD/CNY（留空=实时）</label>
         <input id="manualRate" type="number" step="0.0001" min="0.0001" placeholder="e.g. 7.25" style="width:140px" />
+      </div>
+      <div class="form-group">
+        <label>配色方案</label>
+        <div class="palette-swatches" id="palettePicker"></div>
       </div>
       <div class="rate-badge" id="rateBadge">汇率：获取中…</div>
     </div>
@@ -236,21 +303,82 @@
   </div>
 
   <script>
-  const PALETTE = [
-    '#5c6bc0','#26a69a','#ef5350','#ffa726','#ab47bc',
-    '#42a5f5','#66bb6a','#ff7043','#8d6e63','#26c6da',
-    '#ec407a','#d4e157',
-  ];
-  const PERIOD_LABEL = { day:'天', month:'月', quarter:'季', year:'年' };
-  const CUR_SYM = { CNY:'¥', USD:'$' };
+  // ================================================================
+  // Palettes
+  // ================================================================
+  const PALETTES = {
+    default: ['#5c6bc0','#26a69a','#ef5350','#ffa726','#ab47bc','#42a5f5','#66bb6a','#ff7043','#8d6e63','#26c6da','#ec407a','#d4e157'],
+    warm:    ['#e53935','#fb8c00','#fdd835','#ff7043','#c62828','#f57c00','#f9a825','#bf360c','#6d4c41','#e91e63'],
+    cool:    ['#1e88e5','#00acc1','#43a047','#7cb342','#039be5','#00897b','#3949ab','#8e24aa','#5e35b1','#00bcd4'],
+    pastel:  ['#ef9a9a','#90caf9','#a5d6a7','#fff59d','#ce93d8','#80deea','#ffcc80','#bcaaa4','#b0bec5','#f48fb1'],
+  };
+  const PALETTE_ICONS = {
+    default: ['#5c6bc0','#26a69a','#ef5350','#ffa726'],
+    warm:    ['#e53935','#fb8c00','#fdd835','#ff7043'],
+    cool:    ['#1e88e5','#00acc1','#43a047','#5e35b1'],
+    pastel:  ['#ef9a9a','#90caf9','#a5d6a7','#fff59d'],
+  };
+  const PALETTE_NAMES = { default:'默认', warm:'暖色', cool:'冷色', pastel:'柔和' };
+
+  let activePalette = localStorage.getItem('palette') || 'default';
+
+  function buildPalettePicker() {
+    const wrap = document.getElementById('palettePicker');
+    wrap.innerHTML = Object.keys(PALETTES).map(key => {
+      const c = PALETTE_ICONS[key];
+      const grad = `conic-gradient(${c[0]} 0deg 90deg,${c[1]} 90deg 180deg,${c[2]} 180deg 270deg,${c[3]} 270deg 360deg)`;
+      return `<div class="palette-swatch${key===activePalette?' active':''}" data-key="${key}"
+        title="${PALETTE_NAMES[key]}" style="background:${grad}" onclick="selectPalette('${key}')"></div>`;
+    }).join('');
+  }
+
+  function selectPalette(key) {
+    activePalette = key;
+    localStorage.setItem('palette', key);
+    buildPalettePicker();
+    if (lastSummaryData) renderSummary(lastSummaryData);
+  }
+
+  function itemColor(item, idx) {
+    const pal = PALETTES[activePalette] || PALETTES.default;
+    return item.color || pal[idx % pal.length];
+  }
+
+  // ================================================================
+  // Constants
+  // ================================================================
+  const PERIOD_LABEL = { day:'天', month:'月', quarter:'季', half_year:'半年', year:'年' };
+  const CUR_SYM = { CNY:'¥', USD:'$', EUR:'€', JPY:'¥', GBP:'£', HKD:'HK$', SGD:'S$' };
 
   let chart = null;
   let subs = [];
-  let editingIdx = null;       // which list row is in edit mode
-  let excludedSet = new Set(); // what-if: indices excluded from chart
-  let lastSummaryData = null;  // cache for re-rendering chart without re-fetching
+  let editingIdx = null;
+  let excludedSet = new Set();
+  let lastSummaryData = null;
 
-  // ------------------------------------------------------------------ API ---
+  // ================================================================
+  // Theme
+  // ================================================================
+  const THEMES = ['auto', 'light', 'dark'];
+  const THEME_LABELS = { auto:'自动', light:'☀ 浅色', dark:'🌙 深色' };
+  let currentTheme = localStorage.getItem('theme') || 'auto';
+
+  function applyTheme() {
+    if (currentTheme === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', currentTheme);
+    document.getElementById('themeBtn').textContent = THEME_LABELS[currentTheme];
+  }
+
+  function cycleTheme() {
+    currentTheme = THEMES[(THEMES.indexOf(currentTheme) + 1) % THEMES.length];
+    localStorage.setItem('theme', currentTheme);
+    applyTheme();
+    if (lastSummaryData) renderSummary(lastSummaryData);
+  }
+
+  // ================================================================
+  // API helper
+  // ================================================================
   async function apiFetch(url, opts = {}) {
     const r = await fetch(url, opts);
     if (!r.ok) {
@@ -260,42 +388,48 @@
     return r.json();
   }
 
-  // --------------------------------------------------------- Subscriptions --
+  // ================================================================
+  // Subscriptions
+  // ================================================================
   async function loadSubs() {
     subs = await apiFetch('/api/subscriptions');
     editingIdx = null;
-    excludedSet = new Set(); // reset what-if when data changes
+    excludedSet = new Set();
     renderList();
     loadSummary();
   }
 
+  function renewalBadge(nr, du) {
+    if (nr == null || du == null) return '';
+    let cls, label;
+    if (du <= 0)       { cls = 'renewal-urgent'; label = du === 0 ? '今天' : '已过期'; }
+    else if (du <= 7)  { cls = 'renewal-urgent'; label = `${du}天后`; }
+    else if (du <= 30) { cls = 'renewal-warn';   label = `${du}天后`; }
+    else               { cls = 'renewal-ok';     label = `${du}天后`; }
+    return `<span class="renewal ${cls}" title="${nr}">${label}</span>`;
+  }
+
   function renderList() {
     const wrap = document.getElementById('listWrap');
-    if (!subs.length) {
-      wrap.innerHTML = '<div class="empty">暂无订阅，请先添加。</div>';
-      return;
-    }
-    const rows = subs.map((s, i) => {
-      if (i === editingIdx) return editRow(s, i);
-      return normalRow(s, i);
-    }).join('');
+    if (!subs.length) { wrap.innerHTML = '<div class="empty">暂无订阅，请先添加。</div>'; return; }
     wrap.innerHTML = `
       <table>
         <thead><tr>
-          <th>#</th><th>名称</th><th>金额</th><th>货币</th><th>周期</th><th>添加日期</th><th></th>
+          <th>#</th><th>名称</th><th>金额</th><th>货币</th><th>周期</th><th>下次续费</th><th>操作</th>
         </tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody>${subs.map((s, i) => i === editingIdx ? editRow(s, i) : normalRow(s, i)).join('')}</tbody>
       </table>`;
   }
 
   function normalRow(s, i) {
-    return `<tr id="row-${i}">
+    const dot = s.color ? `<span class="color-dot" style="background:${s.color}"></span>` : '';
+    return `<tr>
       <td>${i + 1}</td>
-      <td>${esc(s.name)}</td>
+      <td>${dot}${esc(s.name)}</td>
       <td>${s.amount.toFixed(2)}</td>
       <td><span class="tag tag-${s.currency.toLowerCase()}">${s.currency}</span></td>
       <td>${PERIOD_LABEL[s.period] || s.period}</td>
-      <td>${s.added || ''}</td>
+      <td>${renewalBadge(s.next_renewal, s.days_until_renewal)}</td>
       <td><div class="action-cell">
         <button class="btn-edit btn-sm" onclick="startEdit(${i})">编辑</button>
         <button class="btn-danger btn-sm" onclick="deleteSub(${i})">删除</button>
@@ -304,57 +438,71 @@
   }
 
   function editRow(s, i) {
-    const periodOpts = ['day','month','quarter','year'].map(p =>
-      `<option value="${p}" ${p === s.period ? 'selected' : ''}>${PERIOD_LABEL[p]}</option>`
-    ).join('');
-    const curOpts = ['USD','CNY'].map(c =>
-      `<option value="${c}" ${c === s.currency ? 'selected' : ''}>${c}</option>`
-    ).join('');
-    return `<tr id="row-${i}" style="background:rgba(92,107,192,.07)">
+    const pOpts = ['day','month','quarter','half_year','year']
+      .map(p => `<option value="${p}"${p===s.period?' selected':''}>${PERIOD_LABEL[p]}</option>`).join('');
+    const cOpts = ['USD','CNY','EUR','JPY','GBP','HKD','SGD']
+      .map(c => `<option value="${c}"${c===s.currency?' selected':''}>${c}</option>`).join('');
+    const hasColor = !!s.color;
+    const colorVal = s.color || '#5c6bc0';
+    return `<tr class="edit-row" id="row-${i}">
       <td>${i + 1}</td>
-      <td><input class="edit-input edit-input-name" data-field="name" value="${esc(s.name)}" /></td>
-      <td><input class="edit-input" data-field="amount" type="number" step="0.01" min="0.01" value="${s.amount}" style="width:90px" /></td>
-      <td><select class="edit-select" data-field="currency">${curOpts}</select></td>
-      <td><select class="edit-select" data-field="period">${periodOpts}</select></td>
-      <td>${s.added || ''}</td>
-      <td><div class="action-cell">
-        <button class="btn-save btn-sm" onclick="saveEdit(${i})">保存</button>
-        <button class="btn-cancel btn-sm" onclick="cancelEdit()">取消</button>
-      </div></td>
+      <td><input class="edit-input" data-f="name" value="${esc(s.name)}" style="width:120px" /></td>
+      <td><input class="edit-input" data-f="amount" type="number" step="0.01" min="0.01" value="${s.amount}" style="width:80px" /></td>
+      <td><select class="edit-select" data-f="currency">${cOpts}</select></td>
+      <td><select class="edit-select" data-f="period">${pOpts}</select></td>
+      <td>
+        <input class="edit-input" data-f="added" type="date" value="${s.added||''}" style="width:120px" />
+        ${s.next_renewal ? `<br><small style="color:var(--text-muted)">下次: ${s.next_renewal}</small>` : ''}
+      </td>
+      <td>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+          <input type="checkbox" id="ec${i}" ${hasColor?'checked':''} onchange="toggleEditColor(${i})" title="自定义颜色" />
+          <input type="color" id="ev${i}" class="edit-color" value="${colorVal}" ${hasColor?'':'disabled'} style="opacity:${hasColor?1:.4}" />
+          <button class="btn-save btn-sm" onclick="saveEdit(${i})">保存</button>
+          <button class="btn-cancel btn-sm" onclick="cancelEdit()">取消</button>
+        </div>
+      </td>
     </tr>`;
   }
 
+  function toggleAddColor() {
+    const cb = document.getElementById('addUseColor');
+    const cp = document.getElementById('addColorPicker');
+    cp.disabled = !cb.checked; cp.style.opacity = cb.checked ? 1 : .4;
+  }
+
+  function toggleEditColor(i) {
+    const cb = document.getElementById(`ec${i}`);
+    const cp = document.getElementById(`ev${i}`);
+    cp.disabled = !cb.checked; cp.style.opacity = cb.checked ? 1 : .4;
+  }
+
   function startEdit(i) {
-    editingIdx = i;
-    renderList();
-    // focus name input
-    const inp = document.querySelector(`#row-${i} [data-field="name"]`);
+    editingIdx = i; renderList();
+    const inp = document.querySelector(`#row-${i} [data-f="name"]`);
     if (inp) { inp.focus(); inp.select(); }
   }
 
-  function cancelEdit() {
-    editingIdx = null;
-    renderList();
-  }
+  function cancelEdit() { editingIdx = null; renderList(); }
 
   async function saveEdit(i) {
     const row = document.getElementById(`row-${i}`);
-    const get = field => row.querySelector(`[data-field="${field}"]`).value;
-    const errEl = document.getElementById('addError'); // reuse error area
+    const get = f => row.querySelector(`[data-f="${f}"]`).value;
+    const useColor = document.getElementById(`ec${i}`).checked;
+    const colorVal = document.getElementById(`ev${i}`).value;
     try {
       await apiFetch(`/api/subscriptions/${i}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:     get('name'),
-          amount:   parseFloat(get('amount')),
-          period:   get('period'),
-          currency: get('currency'),
+          name: get('name'), amount: parseFloat(get('amount')),
+          period: get('period'), currency: get('currency'),
+          added: get('added'), color: useColor ? colorVal : null,
         }),
       });
       await loadSubs();
     } catch (err) {
-      errEl.textContent = err.message;
+      document.getElementById('addError').textContent = err.message;
     }
   }
 
@@ -363,36 +511,47 @@
     loadSubs();
   }
 
-  // -------------------------------------------------------------- Add form --
+  // ================================================================
+  // Add form
+  // ================================================================
   document.getElementById('addForm').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const errEl = document.getElementById('addError');
     errEl.textContent = '';
+    const useColor = document.getElementById('addUseColor').checked;
+    const colorVal = document.getElementById('addColorPicker').value;
     try {
       await apiFetch('/api/subscriptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name:     fd.get('name'),
-          amount:   parseFloat(fd.get('amount')),
-          period:   fd.get('period'),
-          currency: fd.get('currency'),
+          name: fd.get('name'), amount: parseFloat(fd.get('amount')),
+          period: fd.get('period'), currency: fd.get('currency'),
+          added: fd.get('added') || undefined,
+          color: useColor ? colorVal : undefined,
         }),
       });
       e.target.reset();
+      document.getElementById('addUseColor').checked = false;
+      document.getElementById('addColorPicker').disabled = true;
+      document.getElementById('addColorPicker').style.opacity = .4;
+      setTodayDate();
       loadSubs();
-    } catch (err) {
-      errEl.textContent = err.message;
-    }
+    } catch (err) { errEl.textContent = err.message; }
   });
 
-  // --------------------------------------------------------------- Summary --
+  function setTodayDate() {
+    document.getElementById('addDateInput').value = new Date().toISOString().slice(0, 10);
+  }
+
+  // ================================================================
+  // Summary
+  // ================================================================
   async function loadSummary() {
     const currency = document.getElementById('sumCurrency').value;
     const period   = document.getElementById('sumPeriod').value;
     const manual   = document.getElementById('manualRate').value.trim();
-
     let url = `/api/summary?currency=${currency}&period=${period}`;
     if (manual) url += `&rate=${encodeURIComponent(manual)}`;
 
@@ -400,20 +559,18 @@
     try {
       data = await apiFetch(url);
     } catch (err) {
-      document.getElementById('summaryWrap').innerHTML =
-        `<div class="empty error-msg">汇总失败：${err.message}</div>`;
+      document.getElementById('summaryWrap').innerHTML = `<div class="empty error-msg">汇总失败：${err.message}</div>`;
       return;
     }
 
-    const badge = document.getElementById('rateBadge');
     const src = data.rate_source === 'manual' ? '手动' : '实时';
-    badge.innerHTML = `汇率（${src}）：<strong>1 USD = ${data.usd_cny.toFixed(4)} CNY</strong>`;
+    document.getElementById('rateBadge').innerHTML =
+      `汇率（${src}）：<strong>1 USD = ${data.usd_cny.toFixed(4)} CNY</strong>`;
 
     if (!data.items.length) {
       document.getElementById('summaryWrap').innerHTML = '<div class="empty">暂无订阅。</div>';
       if (chart) { chart.destroy(); chart = null; }
-      lastSummaryData = null;
-      return;
+      lastSummaryData = null; return;
     }
 
     lastSummaryData = data;
@@ -426,27 +583,24 @@
     const sym    = CUR_SYM[currency] || '';
     const pLabel = PERIOD_LABEL[period] || period;
 
-    // active items only (for total and chart)
     const activeItems = data.items.filter((_, i) => !excludedSet.has(i));
     const activeTotal = activeItems.reduce((s, it) => s + it.converted, 0);
 
     const rows = data.items.map((item, i) => {
       const excl = excludedSet.has(i);
-      const color = PALETTE[i % PALETTE.length];
-      return `<tr class="detail-row${excl ? ' excluded' : ''}" onclick="toggleExclude(${i})" style="cursor:pointer">
-        <td>
-          <span class="name-cell">
-            <span class="dot" style="background:${excl ? 'var(--border)' : color}"></span>
-            <span class="name-text">${esc(item.name)}</span>
-          </span>
-        </td>
-        <td class="orig-val">${item.amount.toFixed(2)} ${item.currency}/${PERIOD_LABEL[item.period] || item.period}</td>
+      const color = itemColor(item, i);
+      return `<tr class="detail-row${excl?' excluded':''}" onclick="toggleExclude(${i})" style="cursor:pointer">
+        <td><span class="name-cell">
+          <span class="dot" style="background:${excl?'var(--border)':color}"></span>
+          <span class="name-text">${esc(item.name)}</span>
+        </span></td>
+        <td class="orig-val">${item.amount.toFixed(2)} ${item.currency}/${PERIOD_LABEL[item.period]||item.period}</td>
         <td class="converted-val">${sym}${item.converted.toFixed(2)}/${pLabel}</td>
       </tr>`;
     }).join('');
 
     document.getElementById('summaryWrap').innerHTML = `
-      <p class="whatif-hint">💡 点击名称可临时划掉，观察去掉某项后的费用变化（不影响数据）</p>
+      <p class="whatif-hint">点击名称可临时划掉某项，观察去掉后的费用变化（不影响数据）</p>
       <div class="summary-layout">
         <div>
           <div class="chart-wrap"><canvas id="myChart"></canvas></div>
@@ -460,29 +614,26 @@
         </div>
       </div>`;
 
-    drawChart(data, activeItems, sym, pLabel, activeTotal);
+    drawChart(data, activeTotal, sym, pLabel);
   }
 
-  function drawChart(data, activeItems, sym, pLabel, activeTotal) {
+  function drawChart(data, activeTotal, sym, pLabel) {
     if (chart) { chart.destroy(); chart = null; }
-    if (!activeItems.length) return;
+    const activeIdx = data.items.map((_, i) => i).filter(i => !excludedSet.has(i));
+    if (!activeIdx.length) return;
 
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const ctx = document.getElementById('myChart').getContext('2d');
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+      (document.documentElement.getAttribute('data-theme') !== 'light' &&
+       window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-    // map active items back to their original indices for colours
-    const indices = data.items
-      .map((_, i) => i)
-      .filter(i => !excludedSet.has(i));
-
-    chart = new Chart(ctx, {
+    chart = new Chart(document.getElementById('myChart').getContext('2d'), {
       type: 'doughnut',
       data: {
-        labels: indices.map(i => data.items[i].name),
+        labels: activeIdx.map(i => data.items[i].name),
         datasets: [{
-          data:            indices.map(i => data.items[i].converted),
-          backgroundColor: indices.map(i => PALETTE[i % PALETTE.length]),
-          borderColor: isDark ? '#1e1f2b' : '#fff',
+          data:            activeIdx.map(i => data.items[i].converted),
+          backgroundColor: activeIdx.map(i => itemColor(data.items[i], i)),
+          borderColor: isDark ? '#1e1f2b' : '#ffffff',
           borderWidth: 2,
         }],
       },
@@ -500,32 +651,36 @@
           },
         },
         cutout: '62%',
-        animation: { duration: 250 },
+        animation: { duration: 220 },
       },
     });
   }
 
   function toggleExclude(i) {
-    if (excludedSet.has(i)) excludedSet.delete(i);
-    else excludedSet.add(i);
+    if (excludedSet.has(i)) excludedSet.delete(i); else excludedSet.add(i);
     if (lastSummaryData) renderSummary(lastSummaryData);
   }
 
-  // ---------------------------------------------------------------- Utils --
+  // ================================================================
+  // Utils
+  // ================================================================
   function esc(s) {
-    return String(s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // --------------------------------------------------------- Event wiring --
-  ['sumCurrency','sumPeriod'].forEach(id =>
-    document.getElementById(id).addEventListener('change', loadSummary));
+  // ================================================================
+  // Event wiring
+  // ================================================================
+  ['sumCurrency','sumPeriod'].forEach(id => document.getElementById(id).addEventListener('change', loadSummary));
   document.getElementById('manualRate').addEventListener('input', loadSummary);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (lastSummaryData) renderSummary(lastSummaryData);
   });
 
+  // Init
+  applyTheme();
+  buildPalettePicker();
+  setTodayDate();
   loadSubs();
   </script>
 </body>

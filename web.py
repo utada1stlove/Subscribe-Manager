@@ -2,8 +2,9 @@
 """Subscription Fee Calculator — Flask web backend."""
 
 import json
+import math
 import urllib.request
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
@@ -12,7 +13,15 @@ app = Flask(__name__)
 
 DATA_FILE = Path(__file__).parent / "data.json"
 
-PERIOD_DAYS = {"day": 1, "month": 30, "quarter": 90, "year": 360}
+PERIOD_DAYS: dict[str, int] = {
+    "day": 1,
+    "month": 30,
+    "quarter": 90,
+    "half_year": 180,
+    "year": 360,
+}
+
+SUPPORTED_CURRENCIES = ["USD", "CNY", "EUR", "JPY", "GBP", "HKD", "SGD"]
 
 
 # ---------------------------------------------------------------------------
@@ -33,27 +42,45 @@ def save(data: list) -> None:
 # Currency / conversion
 # ---------------------------------------------------------------------------
 
-def fetch_rate() -> float | None:
-    """Fetch live USD→CNY rate from open.er-api.com (no key required)."""
+def fetch_rates(base: str = "USD") -> dict | None:
+    """Fetch live rates from open.er-api.com (no key required).
+    Returns a dict where rates[X] = how many X per 1 base unit."""
     try:
-        url = "https://open.er-api.com/v6/latest/USD"
+        url = f"https://open.er-api.com/v6/latest/{base}"
         with urllib.request.urlopen(url, timeout=6) as resp:
-            return json.loads(resp.read())["rates"]["CNY"]
+            return json.loads(resp.read())["rates"]
     except Exception:
         return None
 
 
 def convert(amount: float, src_period: str, src_currency: str,
-            dst_period: str, dst_currency: str, usd_cny: float) -> float:
-    """Convert amount from (src_period, src_currency) to (dst_period, dst_currency)."""
+            dst_period: str, dst_currency: str, rates: dict) -> float:
+    """Convert amount across periods and currencies.
+    rates is USD-based: rates["USD"]==1.0, rates["CNY"]≈7.26, etc."""
     per_day = amount / PERIOD_DAYS[src_period]
     result = per_day * PERIOD_DAYS[dst_period]
     if src_currency != dst_currency:
-        if src_currency == "USD":
-            result *= usd_cny
-        else:
-            result /= usd_cny
+        # src → USD → dst
+        result = result / rates[src_currency] * rates[dst_currency]
     return result
+
+
+def compute_next_renewal(added_str: str, period: str) -> tuple[str | None, int | None]:
+    """Return (next_renewal_iso, days_until) based on start date and period."""
+    try:
+        added = date.fromisoformat(added_str)
+    except (ValueError, TypeError):
+        return None, None
+    today = date.today()
+    pd = PERIOD_DAYS.get(period, 30)
+    if added >= today:
+        next_date = added
+    else:
+        days_elapsed = (today - added).days
+        cycles = max(1, math.ceil(days_elapsed / pd))
+        next_date = added + timedelta(days=cycles * pd)
+    days_until = (next_date - today).days
+    return next_date.isoformat(), days_until
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +94,15 @@ def index():
 
 @app.route("/api/subscriptions", methods=["GET"])
 def get_subscriptions():
-    return jsonify(load())
+    data = load()
+    result = []
+    for sub in data:
+        item = dict(sub)
+        nr, du = compute_next_renewal(sub.get("added", ""), sub.get("period", "month"))
+        item["next_renewal"] = nr
+        item["days_until_renewal"] = du
+        result.append(item)
+    return jsonify(result)
 
 
 @app.route("/api/subscriptions", methods=["POST"])
@@ -87,17 +122,27 @@ def add_subscription():
         return jsonify({"error": "amount must be a positive number"}), 400
     if period not in PERIOD_DAYS:
         return jsonify({"error": f"period must be one of {list(PERIOD_DAYS)}"}), 400
-    if currency not in ("CNY", "USD"):
-        return jsonify({"error": "currency must be CNY or USD"}), 400
+    if currency not in SUPPORTED_CURRENCIES:
+        return jsonify({"error": f"currency must be one of {SUPPORTED_CURRENCIES}"}), 400
 
-    data = load()
-    entry = {
+    entry: dict = {
         "name": name,
         "amount": amount,
         "period": period,
         "currency": currency,
         "added": date.today().isoformat(),
     }
+    # optional fields
+    if body.get("added"):
+        try:
+            date.fromisoformat(str(body["added"]))
+            entry["added"] = str(body["added"])
+        except ValueError:
+            pass
+    if body.get("color"):
+        entry["color"] = str(body["color"])
+
+    data = load()
     data.append(entry)
     save(data)
     return jsonify(entry), 201
@@ -132,9 +177,23 @@ def update_subscription(idx: int):
         entry["period"] = body["period"]
 
     if "currency" in body:
-        if body["currency"] not in ("CNY", "USD"):
-            return jsonify({"error": "currency must be CNY or USD"}), 400
+        if body["currency"] not in SUPPORTED_CURRENCIES:
+            return jsonify({"error": f"currency must be one of {SUPPORTED_CURRENCIES}"}), 400
         entry["currency"] = body["currency"]
+
+    if "added" in body and body["added"]:
+        try:
+            date.fromisoformat(str(body["added"]))
+            entry["added"] = str(body["added"])
+        except ValueError:
+            return jsonify({"error": "added must be YYYY-MM-DD"}), 400
+
+    # color: null clears it, a string sets it
+    if "color" in body:
+        if body["color"]:
+            entry["color"] = str(body["color"])
+        else:
+            entry.pop("color", None)
 
     save(data)
     return jsonify(entry)
@@ -152,10 +211,11 @@ def delete_subscription(idx: int):
 
 @app.route("/api/rate", methods=["GET"])
 def get_rate():
-    rate = fetch_rate()
-    if rate is None:
-        return jsonify({"error": "failed to fetch rate"}), 502
-    return jsonify({"usd_cny": rate})
+    rates = fetch_rates("USD")
+    if rates is None:
+        return jsonify({"error": "failed to fetch rates"}), 502
+    filtered = {c: rates[c] for c in SUPPORTED_CURRENCIES if c in rates}
+    return jsonify({"base": "USD", "rates": filtered})
 
 
 @app.route("/api/summary", methods=["GET"])
@@ -164,47 +224,67 @@ def get_summary():
     period = request.args.get("period", "month")
     rate_param = request.args.get("rate")
 
-    if currency not in ("CNY", "USD"):
-        return jsonify({"error": "currency must be CNY or USD"}), 400
+    if currency not in SUPPORTED_CURRENCIES:
+        return jsonify({"error": f"currency must be one of {SUPPORTED_CURRENCIES}"}), 400
     if period not in PERIOD_DAYS:
         return jsonify({"error": f"period must be one of {list(PERIOD_DAYS)}"}), 400
 
-    if rate_param is not None:
+    rates = fetch_rates("USD")
+    rate_source = "live"
+
+    if rates is None:
+        # fallback: manual USD/CNY only
+        if rate_param is not None:
+            try:
+                manual = float(rate_param)
+                if manual <= 0:
+                    raise ValueError
+            except ValueError:
+                return jsonify({"error": "rate must be a positive number"}), 400
+            data_preview = load()
+            used = {s["currency"] for s in data_preview} | {currency}
+            if not used.issubset({"USD", "CNY"}):
+                return jsonify({"error": "live rate fetch failed; manual rate only covers USD/CNY"}), 502
+            rates = {"USD": 1.0, "CNY": manual}
+            rate_source = "manual"
+        else:
+            return jsonify({"error": "failed to fetch live rates; supply ?rate= for USD/CNY fallback"}), 502
+    elif rate_param is not None:
         try:
-            usd_cny = float(rate_param)
-            if usd_cny <= 0:
+            manual = float(rate_param)
+            if manual <= 0:
                 raise ValueError
         except ValueError:
             return jsonify({"error": "rate must be a positive number"}), 400
+        rates["CNY"] = manual
         rate_source = "manual"
-    else:
-        usd_cny = fetch_rate()
-        if usd_cny is None:
-            return jsonify({"error": "failed to fetch live rate; supply ?rate="}), 502
-        rate_source = "live"
 
     data = load()
     items = []
     total = 0.0
     for sub in data:
-        converted = convert(sub["amount"], sub["period"], sub["currency"],
-                            period, currency, usd_cny)
+        src = sub["currency"]
+        if src not in rates or currency not in rates:
+            continue
+        converted = convert(sub["amount"], sub["period"], src, period, currency, rates)
         total += converted
         items.append({
             "name": sub["name"],
             "amount": sub["amount"],
             "period": sub["period"],
             "currency": sub["currency"],
+            "color": sub.get("color"),
             "converted": round(converted, 4),
         })
 
     return jsonify({
         "currency": currency,
         "period": period,
-        "usd_cny": usd_cny,
+        "usd_cny": rates.get("CNY", 0),
         "rate_source": rate_source,
         "total": round(total, 4),
         "items": items,
+        "rates": {c: rates[c] for c in SUPPORTED_CURRENCIES if c in rates},
     })
 
 
